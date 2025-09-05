@@ -13,8 +13,9 @@ from backend.logic import (
     record_served_words, create_session_items, save_attempt,
     session_summary, mark_session_completed, get_user_stats, count_words, add_word_rows
 )
+from frontend.quiz_page import quiz
 
-APP_TITLE = "Word Meaning (Daily 20)"
+APP_TITLE = "Vocabulary Improvement"
 IST = pytz.timezone("Asia/Kolkata")
 
 def ensure_init():
@@ -81,7 +82,7 @@ def sign_in():
         user = auth.verify_password(username, pw)
         if user:
             st.session_state.auth_user = user
-            st.success("Signed in.")
+            st.session_state["redirect_to_quiz"] = True
         else:
             st.error("Invalid username or password.")
 
@@ -115,6 +116,10 @@ def dashboard():
     st.write("Use the **Quiz** tab in the sidebar to start or resume today's session(s).")
 
 def prepare_new_session():
+    """
+    Prepares a new quiz session for the currently authenticated user by creating or resuming a session,
+    building a batch of quiz items, and initializing session state variables.
+    """
     user_id = st.session_state.auth_user["id"]
     sid = start_or_resume_session(user_id, local_date())
     # If it's truly new (no items), create 20 fresh items
@@ -130,61 +135,30 @@ def prepare_new_session():
         # Create DB rows for items
         create_session_items(sid, batch)
 
-def quiz():
-    st.subheader("Quiz (20 per session)")
-    if st.session_state.current_session_id is None or not st.session_state.current_items:
-        if st.button("Start today's session"):
-            prepare_new_session()
-        return
-
-    items = st.session_state.current_items
-    idx = st.session_state.current_index
-    if idx >= len(items):
-        # summary
-        sid = st.session_state.current_session_id
-        summary = session_summary(sid)
-        st.success(f"You answered {summary['correct']} / {summary['total']} correctly.")
-        if summary["wrong"]:
-            st.session_state.review_after = True
-            st.write("### Review your incorrect answers")
-            for w in summary["wrong"]:
-                st.markdown(f"- **Definition:** {w['definition']}  \n  **Correct word:** {w['word']}")
-        # complete and allow next session
-        mark_session_completed(sid)
-        st.session_state.current_session_id = None
-        st.session_state.current_items = []
-        st.session_state.current_index = 0
-        if st.button("Start next set of 20"):
-            prepare_new_session()
-        return
-
-    item = items[idx]
-    st.markdown(f"**Q{idx+1}.** {item['question']}")
-    choice = st.radio("Pick the correct word:", item["options"], index=None, key=f"q_{idx}")
-    disabled = choice is None
-    if st.button("Submit answer", disabled=disabled):
-        elapsed = int((time.time() - st.session_state.start_time) * 1000) if st.session_state.start_time else None
-        correct = (choice == item["answer"])
-        save_attempt(st.session_state.auth_user["id"],
-                     st.session_state.current_session_id,
-                     item["word_id"], choice, correct, response_time_ms=elapsed)
-        if correct:
-            st.success("Correct!")
-        else:
-            st.error(f"Incorrect. Correct answer: **{item['answer']}**")
-        st.session_state.current_index += 1
-        st.session_state.start_time = time.time()
-        st.rerun()
+from frontend.quiz_page import quiz
 
 def main():
     ensure_init()
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Sign in / Sign up", "Dashboard", "Quiz", "Admin · Words"])
+    if st.session_state.auth_user:
+        st.sidebar.title("Navigation")
+        if st.session_state.auth_user.get("is_admin"):
+            pages = ["Dashboard", "Quiz", "Admin · Words"]
+        else:
+            pages = ["Dashboard", "Quiz"]
+        # Redirect to Quiz if just signed in
+        if st.session_state.pop("redirect_to_quiz", False):
+            page = "Quiz"
+        else:
+            page = st.sidebar.radio("Go to", pages)
+    else:
+        page = "Sign in / Sign up"
 
     header()
-    if not st.session_state.auth_user and page != "Sign in / Sign up":
-        st.info("Please sign in first.")
-        page = "Sign in / Sign up"
+
+    # If signed in, prevent access to sign in/sign up page
+    if st.session_state.auth_user and page == "Sign in / Sign up":
+        st.warning("You are already signed in.")
+        page = "Dashboard"
 
     if page == "Sign in / Sign up":
         tab1, tab2 = st.tabs(["Sign in", "Sign up"])
