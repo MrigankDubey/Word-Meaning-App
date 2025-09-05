@@ -160,9 +160,24 @@ def quiz():
 
     item = items[idx]
     st.markdown(f"**Q{idx+1}.** {item['question']}")
-    choice = st.radio("Pick the correct word:", item["options"], index=None, key=f"q_{idx}")
-    disabled = choice is None
-    if st.button("Submit answer", disabled=disabled):
+
+    # Make options appear as clickable boxes using columns and buttons
+    choice_key = f"choice_{idx}"
+    if choice_key not in st.session_state:
+        st.session_state[choice_key] = None
+
+    option_cols = st.columns(len(item["options"]))
+    for i, option in enumerate(item["options"]):
+        # Style for the selected option
+        button_type = "primary" if st.session_state[choice_key] == option else "secondary"
+        if option_cols[i].button(option, key=f"{choice_key}_btn_{i}"):
+            st.session_state[choice_key] = option
+
+    choice = st.session_state[choice_key]
+    if choice:
+        st.info(f"You selected: {choice}")
+
+    if st.button("Submit answer", disabled=(choice is None)):
         elapsed = int((time.time() - st.session_state.start_time) * 1000) if st.session_state.start_time else None
         correct = (choice == item["answer"])
         save_attempt(st.session_state.auth_user["id"],
@@ -174,6 +189,8 @@ def quiz():
             st.error(f"Incorrect. Correct answer: **{item['answer']}**")
         st.session_state.current_index += 1
         st.session_state.start_time = time.time()
+        # Reset choice for next question
+        st.session_state.pop(choice_key, None)
         st.rerun()
 
 def main():
