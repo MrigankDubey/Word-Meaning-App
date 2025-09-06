@@ -98,6 +98,27 @@ def build_quiz_batch(user_id, date_local=None, size=20):
         })
     return items
 
+def build_retry_batch(word_ids):
+    """Build a quiz batch from specific word IDs for retry sessions."""
+    if not word_ids:
+        return []
+    
+    with get_conn() as con:
+        cur = con.cursor()
+        placeholders = ",".join("?" for _ in word_ids)
+        cur.execute(f"SELECT id, text, definition, part_of_speech FROM words WHERE id IN ({placeholders})", word_ids)
+        rows = cur.fetchall()
+    
+    items = []
+    for idx, (wid, text, definition, pos) in enumerate(rows, start=1):
+        distractors = get_random_distractors(wid, 4, pos)
+        options = distractors + [text]
+        random.shuffle(options)
+        items.append({
+            "word_id": wid, "question": definition, "answer": text, "options": options, "pos": pos
+        })
+    return items
+
 def record_served_words(user_id, word_ids, date_local=None):
     date_local = date_local or today_local_str()
     with get_conn() as con:

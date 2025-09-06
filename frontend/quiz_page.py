@@ -21,19 +21,38 @@ def quiz():
         sid = st.session_state.current_session_id
         summary = session_summary(sid)
         st.success(f"You answered {summary['correct']} / {summary['total']} correctly.")
+        
         if summary["wrong"]:
             st.session_state.review_after = True
             st.write("### Review your incorrect answers")
             for w in summary["wrong"]:
                 st.markdown(f"- **Definition:** {w['definition']}  \n  **Correct word:** {w['word']}")
-        # complete and allow next session
-        mark_session_completed(sid)
-        st.session_state.current_session_id = None
-        st.session_state.current_items = []
-        st.session_state.current_index = 0
-        if st.button("Start next set of 20"):
-            from app import prepare_new_session
-            prepare_new_session()
+            
+            # Instead of completing the session, prepare a retry with wrong answers
+            st.write("---")
+            if st.button("Retry incorrect answers"):
+                from app import prepare_retry_session
+                wrong_word_ids = [w["word_id"] for w in summary["wrong"]]
+                prepare_retry_session(wrong_word_ids)
+                st.experimental_rerun()
+        else:
+            # All answers correct!
+            if st.session_state.get("is_retry_mode", False):
+                st.balloons()
+                st.success("🎉 Excellent! You've mastered all the words from your incorrect attempts!")
+                st.session_state.is_retry_mode = False
+            else:
+                st.success("🎉 Perfect score!")
+            
+            # complete and allow next session
+            mark_session_completed(sid)
+            st.session_state.current_session_id = None
+            st.session_state.current_items = []
+            st.session_state.current_index = 0
+            if st.button("Start next set of 20"):
+                from app import prepare_new_session
+                prepare_new_session()
+                st.experimental_rerun()
         return
 
     item = items[idx]
