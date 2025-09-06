@@ -14,8 +14,10 @@ from backend.logic import (
     session_summary, mark_session_completed, get_user_stats, count_words, add_word_rows
 )
 from frontend.quiz_page import quiz
+from frontend.sidebar_nav import sidebar_nav
+from frontend.dashboard_page import dashboard  # <-- Add this import
 
-APP_TITLE = "Vocabulary Improvement"
+APP_TITLE = "Vocabulary"
 IST = pytz.timezone("Asia/Kolkata")
 
 def ensure_init():
@@ -51,7 +53,7 @@ def header():
     st.title(APP_TITLE)
     if st.session_state.auth_user:
         st.caption(f"Welcome, **{st.session_state.auth_user['username']}** — {local_date()} (Asia/Kolkata)")
-        st.button("Sign out", on_click=lambda: st.session_state.update({'auth_user': None, 'current_session_id': None, 'current_index': 0, 'current_items': [], 'review_after': False}))
+    # Removed the sign out button from here
 
 def sign_up():
     st.subheader("Create account")
@@ -82,7 +84,8 @@ def sign_in():
         user = auth.verify_password(username, pw)
         if user:
             st.session_state.auth_user = user
-            st.session_state["redirect_to_quiz"] = True
+            st.session_state.page = "Dashboard"  # Ensure redirect to Dashboard
+            st.experimental_rerun()
         else:
             st.error("Invalid username or password.")
 
@@ -135,21 +138,10 @@ def prepare_new_session():
         # Create DB rows for items
         create_session_items(sid, batch)
 
-from frontend.quiz_page import quiz
-
 def main():
     ensure_init()
     if st.session_state.auth_user:
-        st.sidebar.title("Navigation")
-        if st.session_state.auth_user.get("is_admin"):
-            pages = ["Dashboard", "Quiz", "Admin · Words"]
-        else:
-            pages = ["Dashboard", "Quiz"]
-        # Redirect to Quiz if just signed in
-        if st.session_state.pop("redirect_to_quiz", False):
-            page = "Quiz"
-        else:
-            page = st.sidebar.radio("Go to", pages)
+        page = sidebar_nav(st.session_state.auth_user)
     else:
         page = "Sign in / Sign up"
 
@@ -159,6 +151,7 @@ def main():
     if st.session_state.auth_user and page == "Sign in / Sign up":
         st.warning("You are already signed in.")
         page = "Dashboard"
+        st.session_state.page = "Dashboard"  # Only set here for redirect
 
     if page == "Sign in / Sign up":
         tab1, tab2 = st.tabs(["Sign in", "Sign up"])
@@ -168,7 +161,7 @@ def main():
             sign_up()
     elif page == "Dashboard":
         dashboard()
-    elif page == "Quiz":
+    elif page == "Vocabulary Builder":  # <-- updated name
         prepare_new_session()
         quiz()
     elif page == "Admin · Words":
