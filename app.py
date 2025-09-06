@@ -9,7 +9,7 @@ import pytz
 from backend.db import init_db
 from backend import auth
 from backend.logic import (
-    today_local_str, start_or_resume_session, build_quiz_batch,
+    today_local_str, start_or_resume_session, build_quiz_batch, build_retry_batch,
     record_served_words, create_session_items, save_attempt,
     session_summary, mark_session_completed, get_user_stats, count_words, add_word_rows
 )
@@ -43,6 +43,8 @@ def ensure_init():
         st.session_state.start_time = None
     if "review_after" not in st.session_state:
         st.session_state.review_after = False
+    if "is_retry_mode" not in st.session_state:
+        st.session_state.is_retry_mode = False
 
 def local_date():
     return datetime.now(IST).strftime("%Y-%m-%d")
@@ -134,6 +136,22 @@ def prepare_new_session():
         record_served_words(user_id, [it["word_id"] for it in batch], local_date())
         # Create DB rows for items
         create_session_items(sid, batch)
+
+def prepare_retry_session(wrong_word_ids):
+    """
+    Prepares a retry session with only the incorrectly answered words.
+    """
+    user_id = st.session_state.auth_user["id"]
+    sid = start_or_resume_session(user_id, local_date())
+    st.session_state.current_session_id = sid
+    # Build retry batch with only wrong words
+    batch = build_retry_batch(wrong_word_ids)
+    st.session_state.current_items = batch
+    st.session_state.current_index = 0
+    st.session_state.start_time = time.time()
+    st.session_state.is_retry_mode = True
+    # Create DB rows for items
+    create_session_items(sid, batch)
 
 from frontend.quiz_page import quiz
 
