@@ -142,6 +142,11 @@ def prepare_retry_session(wrong_word_ids):
     Prepares a retry session with only the incorrectly answered words.
     """
     user_id = st.session_state.auth_user["id"]
+    # Mark current session as completed before creating retry
+    if st.session_state.current_session_id:
+        mark_session_completed(st.session_state.current_session_id)
+    
+    # Create a new session for retry
     sid = start_or_resume_session(user_id, local_date())
     st.session_state.current_session_id = sid
     # Build retry batch with only wrong words
